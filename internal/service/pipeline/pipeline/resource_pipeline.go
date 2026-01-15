@@ -414,7 +414,11 @@ func buildCreatePipeline(d *schema.ResourceData) (nextgen.PipelineCreateRequestB
 		}
 
 		if attr, ok := config["store_type"]; ok && attr != nil {
-			pipeline.GitDetails.StoreType = attr.(string)
+			v, ok := attr.(string)
+			if !ok || v == "" {
+				return pipeline, diag.Errorf("store_type must be set when git_details is provided")
+			}
+			pipeline.GitDetails.StoreType = v
 		} else {
 			return pipeline, diag.Errorf("store_type must be set when git_details is provided")
 		}
