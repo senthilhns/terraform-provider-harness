@@ -129,3 +129,6 @@ If you have any questions or need assistance:
 ## License
 
 This project is licensed under the terms of the [LICENSE](LICENSE.md) file.
+
+
+HARNESS_TF_LOG_PAYLOAD=1 HARNESS_TF_LOG_PAYLOAD_FILE=/tmp/harness-http-payload.log TF_LOG=TRACE tofu apply -auto-approve

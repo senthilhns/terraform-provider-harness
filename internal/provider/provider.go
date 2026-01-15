@@ -1,9 +1,15 @@
 package provider
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"os"
+	"strings"
+	"sync"
 
 	"github.com/harness/terraform-provider-harness/internal/service/platform/module_registry_testing"
 
@@ -140,6 +146,79 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
+
+type payloadLoggingTransport struct {
+	enabled bool
+	next    http.RoundTripper
+}
+
+var payloadLogMu sync.Mutex
+
+func payloadLogf(format string, args ...interface{}) {
+	payloadLogMu.Lock()
+	defer payloadLogMu.Unlock()
+
+	fmt.Fprintf(os.Stderr, format, args...)
+
+	if p := os.Getenv("HARNESS_TF_LOG_PAYLOAD_FILE"); p != "" {
+		f, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+		if err == nil {
+			_, _ = fmt.Fprintf(f, format, args...)
+			_ = f.Close()
+		}
+	}
+}
+
+func (t *payloadLoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	//if os.Getenv("HARNESS_TF_PANIC_ON_HTTP") == "1" {
+	// panic("HARNESS_TF_PANIC_ON_HTTP=1: payloadLoggingTransport.RoundTrip invoked")
+	//}
+
+	if t.next == nil {
+		t.next = http.DefaultTransport
+	}
+
+	var reqBodyBytes []byte
+	if req != nil && req.Body != nil {
+		b, err := io.ReadAll(req.Body)
+		if err == nil {
+			reqBodyBytes = b
+			req.Body = io.NopCloser(bytes.NewBuffer(b))
+		}
+	}
+
+	if t.enabled && req != nil {
+		payloadLogf("HTTP payload logging enabled (HARNESS_TF_LOG_PAYLOAD=1)\n")
+
+		redactedHeaders := make(map[string][]string, len(req.Header))
+		for k, v := range req.Header {
+			lk := strings.ToLower(k)
+			if lk == "authorization" || lk == "x-api-key" {
+				redactedHeaders[k] = []string{"REDACTED"}
+				continue
+			}
+			redactedHeaders[k] = v
+		}
+		payloadLogf("HTTP request payload: method=%s url=%s headers=%v body=%s\n", req.Method, req.URL.String(), redactedHeaders, string(reqBodyBytes))
+	}
+
+	resp, err := t.next.RoundTrip(req)
+	if err != nil || resp == nil {
+		return resp, err
+	}
+
+	if t.enabled && resp.Body != nil {
+		respBodyBytes, readErr := io.ReadAll(resp.Body)
+		if readErr == nil {
+			resp.Body = io.NopCloser(bytes.NewBuffer(respBodyBytes))
+			payloadLogf("HTTP response payload: method=%s url=%s status=%s body=%s\n", req.Method, req.URL.String(), resp.Status, string(respBodyBytes))
+		} else {
+			resp.Body = io.NopCloser(bytes.NewBuffer(nil))
+		}
+	}
+
+	return resp, err
+}
 
 func init() {
 	// Set descriptions to support markdown syntax, this will be used in document generation
@@ -547,7 +626,12 @@ func getHttpClient(logger *logrus.Logger) *retryablehttp.Client {
 
 func getOpenApiHttpClient(logger *logrus.Logger) *retryablehttp.Client {
 	httpClient := retryablehttp.NewClient()
-	httpClient.HTTPClient.Transport = openapi_client_logging.NewTransport(harness.SDKName, logger, cleanhttp.DefaultPooledClient().Transport)
+	baseTransport := openapi_client_logging.NewTransport(harness.SDKName, logger, cleanhttp.DefaultPooledClient().Transport)
+	if os.Getenv("HARNESS_TF_LOG_PAYLOAD") == "1" {
+		httpClient.HTTPClient.Transport = &payloadLoggingTransport{enabled: true, next: baseTransport}
+	} else {
+		httpClient.HTTPClient.Transport = baseTransport
+	}
 	httpClient.RetryMax = 10
 	return httpClient
 }
