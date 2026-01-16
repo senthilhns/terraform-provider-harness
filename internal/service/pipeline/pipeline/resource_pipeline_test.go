@@ -602,3 +602,125 @@ func TestAccResourcePipelineHarnessCode(t *testing.T) {
 		},
 	})
 }
+
+func TestAccResourcePipelineInlineImplicit(t *testing.T) {
+	resourceName := "harness_platform_pipeline.tmpgitdetails"
+	projectID := "terraform_testing"
+
+	testCases := []struct {
+		name            string
+		includeGitBlock bool
+	}{
+		{
+			name:            "with_git_details",
+			includeGitBlock: true,
+		},
+		{
+			name:            "without_git_details",
+			includeGitBlock: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			resource.UnitTest(t, resource.TestCase{
+				PreCheck:          func() { acctest.TestAccPreCheck(t) },
+				ProviderFactories: acctest.ProviderFactories,
+				CheckDestroy:      testAccPipelineDestroy(resourceName),
+				Steps: []resource.TestStep{
+					{
+						Config: testAccResourceImplicitInlineConfig(projectID, tc.includeGitBlock),
+						Check:  testAccResourceInlineImplicitCheck(resourceName, projectID, tc.includeGitBlock),
+					},
+				},
+			})
+		})
+	}
+}
+
+func testAccResourceInlineImplicitCheck(resourceName string, projectID string, includeGitBlock bool) resource.TestCheckFunc {
+	checks := []resource.TestCheckFunc{
+		resource.TestCheckResourceAttr(resourceName, "id", "tmpgitdetails"),
+		resource.TestCheckResourceAttr(resourceName, "identifier", "tmpgitdetails"),
+		resource.TestCheckResourceAttr(resourceName, "name", "tmpgitdetails"),
+		resource.TestCheckResourceAttr(resourceName, "org_id", "default"),
+		resource.TestCheckResourceAttr(resourceName, "project_id", projectID),
+	}
+
+	if includeGitBlock {
+		checks = append(checks,
+			resource.TestCheckResourceAttr(resourceName, "git_details.0.branch_name", "main"),
+			resource.TestCheckResourceAttr(resourceName, "git_details.0.file_path", "tmpgitdetails.yaml"),
+			resource.TestCheckResourceAttr(resourceName, "git_details.0.store_type", "INLINE"),
+		)
+	}
+
+	return resource.ComposeTestCheckFunc(checks...)
+}
+
+func testAccResourceImplicitInlineConfig(projectID string, includeGitBlock bool) string {
+	gitBlock := ""
+	if includeGitBlock {
+		gitBlock = `
+
+  git_details {
+    branch_name = "main"
+    file_path   = "tmpgitdetails.yaml"
+    store_type  = "INLINE"
+  }
+`
+	}
+
+	return fmt.Sprintf(`
+terraform {
+  required_providers {
+    harness = {
+      source  = "harness/harness"
+      version = "0.40.2"
+    }
+  }
+}
+
+resource "harness_platform_pipeline" "tmpgitdetails" {
+  identifier = "tmpgitdetails"
+  name       = "tmpgitdetails"
+  org_id     = "default"
+  project_id = "%s"%s
+
+  yaml = <<-EOT
+pipeline:
+  name: tmpgitdetails
+  identifier: tmpgitdetails
+  orgIdentifier: default
+  projectIdentifier: "%s"
+  tags: {}
+  stages:
+    - stage:
+        name: custom
+        identifier: custom
+        description: ""
+        type: Custom
+        spec:
+          execution:
+            steps:
+              - step:
+                  type: ShellScript
+                  name: ShellScript_1
+                  identifier: ShellScript_1
+                  spec:
+                    shell: Bash
+                    executionTarget: {}
+                    source:
+                      type: Inline
+                      spec:
+                        script: echo "test"
+                    environmentVariables: []
+                    outputVariables: []
+                  timeout: 10m
+        tags: {}
+
+  EOT
+}
+`, projectID, gitBlock, projectID)
+}
