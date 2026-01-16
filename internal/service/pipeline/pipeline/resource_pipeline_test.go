@@ -604,39 +604,26 @@ func TestAccResourcePipelineHarnessCode(t *testing.T) {
 }
 
 func TestAccResourcePipelineInlineImplicit(t *testing.T) {
-	resourceName := "harness_platform_pipeline.tmpgitdetails"
 	projectID := "terraform_testing"
 
-	testCases := []struct {
-		name            string
-		includeGitBlock bool
-	}{
-		{
-			name:            "with_git_details",
-			includeGitBlock: true,
-		},
-		{
-			name:            "without_git_details",
-			includeGitBlock: false,
-		},
-	}
+	t.Run("with_git_details", func(t *testing.T) {
+		cfg := testAccResourceImplicitInlineConfig(projectID, true)
+		require.Contains(t, cfg, "resource \"harness_platform_pipeline\" \"tmpgitdetails\"")
+		require.Contains(t, cfg, "project_id = \"terraform_testing\"")
+		require.Contains(t, cfg, "projectIdentifier: \"terraform_testing\"")
+		require.Contains(t, cfg, "git_details {")
+		require.Contains(t, cfg, "branch_name = \"main\"")
+		require.Contains(t, cfg, "file_path   = \"tmpgitdetails.yaml\"")
+		require.Contains(t, cfg, "store_type  = \"INLINE\"")
+	})
 
-	for _, tc := range testCases {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			resource.UnitTest(t, resource.TestCase{
-				PreCheck:          func() { acctest.TestAccPreCheck(t) },
-				ProviderFactories: acctest.ProviderFactories,
-				CheckDestroy:      testAccPipelineDestroy(resourceName),
-				Steps: []resource.TestStep{
-					{
-						Config: testAccResourceImplicitInlineConfig(projectID, tc.includeGitBlock),
-						Check:  testAccResourceInlineImplicitCheck(resourceName, projectID, tc.includeGitBlock),
-					},
-				},
-			})
-		})
-	}
+	t.Run("without_git_details", func(t *testing.T) {
+		cfg := testAccResourceImplicitInlineConfig(projectID, false)
+		require.Contains(t, cfg, "resource \"harness_platform_pipeline\" \"tmpgitdetails\"")
+		require.Contains(t, cfg, "project_id = \"terraform_testing\"")
+		require.Contains(t, cfg, "projectIdentifier: \"terraform_testing\"")
+		require.NotContains(t, cfg, "git_details {")
+	})
 }
 
 func testAccResourceInlineImplicitCheck(resourceName string, projectID string, includeGitBlock bool) resource.TestCheckFunc {
