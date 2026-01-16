@@ -604,13 +604,13 @@ func TestAccResourcePipelineHarnessCode(t *testing.T) {
 }
 
 func TestAccResourcePipelineInlineImplicit(t *testing.T) {
-	projectID := "terraform_testing"
+	projectID := "terraform_testing_tmp"
 
 	t.Run("with_git_details", func(t *testing.T) {
 		cfg := testAccResourceImplicitInlineConfig(projectID, true)
 		require.Contains(t, cfg, "resource \"harness_platform_pipeline\" \"tmpgitdetails\"")
-		require.Contains(t, cfg, "project_id = \"terraform_testing\"")
-		require.Contains(t, cfg, "projectIdentifier: \"terraform_testing\"")
+		require.Contains(t, cfg, "project_id = \"terraform_testing_tmp\"")
+		require.Contains(t, cfg, "projectIdentifier: \"terraform_testing_tmp\"")
 		require.Contains(t, cfg, "git_details {")
 		require.Contains(t, cfg, "branch_name = \"main\"")
 		require.Contains(t, cfg, "file_path   = \"tmpgitdetails.yaml\"")
@@ -620,8 +620,8 @@ func TestAccResourcePipelineInlineImplicit(t *testing.T) {
 	t.Run("without_git_details", func(t *testing.T) {
 		cfg := testAccResourceImplicitInlineConfig(projectID, false)
 		require.Contains(t, cfg, "resource \"harness_platform_pipeline\" \"tmpgitdetails\"")
-		require.Contains(t, cfg, "project_id = \"terraform_testing\"")
-		require.Contains(t, cfg, "projectIdentifier: \"terraform_testing\"")
+		require.Contains(t, cfg, "project_id = \"terraform_testing_tmp\"")
+		require.Contains(t, cfg, "projectIdentifier: \"terraform_testing_tmp\"")
 		require.NotContains(t, cfg, "git_details {")
 	})
 }
