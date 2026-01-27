@@ -81,7 +81,7 @@ func ResourceDelegateToken() *schema.Resource {
 				Optional:    true,
 				Computed:    true,
 			},
-			"purge_and_delete": {
+			"purge_on_delete": {
 				Type:     schema.TypeBool,
 				Optional: true,
 				Default:  false,
@@ -192,7 +192,7 @@ func resourceDelegateTokenDestroy(ctx context.Context, d *schema.ResourceData, m
 		return dg
 	}
 
-	purgeAndDelete := d.Get("purge_and_delete").(bool)
+	purgeAndDelete := d.Get("purge_on_delete").(bool)
 	if purgeAndDelete {
 		return resourceDelegateTokenDelete(ctx, d, meta)
 	}
